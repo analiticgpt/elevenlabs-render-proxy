@@ -1,39 +1,71 @@
 import express from "express";
+import http from "http";
+import { WebSocketServer } from "ws";
 import cors from "cors";
-import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const ELEVEN_KEY = process.env.ELEVEN_KEY;
+const ELEVEN_VOICE_ID = "Yko7PKHZNXotIFUBG7I9"; // можешь заменить на другой
+const ELEVEN_MODEL = "eleven_multilingual_v2";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ELEVEN_KEY = process.env.ELEVEN_KEY;
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
-app.post("/stream", async (req, res) => {
-  const { text, voice_id } = req.body;
-  if (!ELEVEN_KEY) return res.status(500).send("No ELEVEN_KEY");
-  if (!text || !voice_id) return res.status(400).send("No text or voice_id");
+wss.on("connection", async (wsClient) => {
+  let textBuffer = "";
 
-  const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voice_id}/stream`;
+  wsClient.on("message", async (message) => {
+    try {
+      const parsed = JSON.parse(message.toString());
+      if (!parsed.text) return;
 
-  const elevenRes = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "xi-api-key": ELEVEN_KEY,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      text,
-      model_id: "eleven_multilingual_v2",
-      output_format: "mp3_44100_128"
-    })
+      const wsEleven = new WebSocket(`wss://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE_ID}/stream`, {
+        headers: {
+          "xi-api-key": ELEVEN_KEY,
+          "Content-Type": "application/json",
+        },
+      });
+
+      wsEleven.on("open", () => {
+        wsEleven.send(
+          JSON.stringify({
+            text: parsed.text,
+            model_id: ELEVEN_MODEL,
+            voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          })
+        );
+      });
+
+      wsEleven.on("message", (data) => {
+        wsClient.send(data);
+      });
+
+      wsEleven.on("error", (err) => {
+        console.error("WebSocket error (ElevenLabs):", err);
+        wsClient.send(JSON.stringify({ error: "ElevenLabs error" }));
+      });
+
+      wsEleven.on("close", () => {
+        wsClient.close();
+      });
+    } catch (err) {
+      console.error("Proxy error:", err);
+      wsClient.send(JSON.stringify({ error: "Server error" }));
+    }
   });
+});
 
-  res.setHeader("Content-Type", "audio/mpeg");
-  res.setHeader("Transfer-Encoding", "chunked");
-  elevenRes.body.pipe(res);
+app.get("/", (req, res) => {
+  res.send("✅ ElevenLabs WebSocket Proxy is running");
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("ElevenLabs stream proxy ready!");
+server.listen(PORT, () => {
+  console.log(`✅ Proxy listening on port ${PORT}`);
 });
