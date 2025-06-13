@@ -7,8 +7,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const ELEVEN_KEY = process.env.ELEVEN_KEY;
-const ELEVEN_VOICE_ID = "Yko7PKHZNXotIFUBG7I9"; // можно заменить на любой другой
-const ELEVEN_MODEL = "eleven_multilingual_v2";
+const ELEVEN_VOICE_ID = "Yko7PKHZNXotIFUBG7I9";
+const ELEVEN_MODEL = "eleven_monolingual_v1"; // ✅ стабильная поддерживаемая модель
 
 const app = express();
 app.use(cors());
@@ -21,7 +21,13 @@ wss.on("connection", async (wsClient) => {
   wsClient.on("message", async (message) => {
     try {
       const parsed = JSON.parse(message.toString());
-      if (!parsed.text) return;
+      if (!parsed.text) {
+        console.warn("⛔ Текст не получен от клиента");
+        wsClient.send(JSON.stringify({ error: "No text provided" }));
+        return;
+      }
+
+      console.log("📥 Получен текст от клиента:", parsed.text);
 
       const wsEleven = new WebSocket(
         `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE_ID}/stream`,
@@ -48,10 +54,11 @@ wss.on("connection", async (wsClient) => {
 
       wsEleven.on("message", (data, isBinary) => {
         if (isBinary) {
-          wsClient.send(data); // 🎧 Прокидываем только аудиофреймы
+          console.log("🎧 Фрейм аудио", data.length);
+          wsClient.send(data);
         } else {
           const msg = data.toString();
-          console.warn("🟡 ElevenLabs JSON message:", msg);
+          console.warn("📨 ElevenLabs ответ:", msg);
           if (msg.includes("error")) {
             wsClient.send(JSON.stringify({ error: msg }));
           }
@@ -59,7 +66,7 @@ wss.on("connection", async (wsClient) => {
       });
 
       wsEleven.on("error", (err) => {
-        console.error("❌ WebSocket error (ElevenLabs):", err);
+        console.error("❌ Ошибка WebSocket (ElevenLabs):", err);
         wsClient.send(JSON.stringify({ error: "ElevenLabs error" }));
       });
 
