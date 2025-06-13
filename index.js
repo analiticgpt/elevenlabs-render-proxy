@@ -6,8 +6,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const ELEVEN_KEY = process.env.ELEVEN_KEY;
-const VOICE_ID = "Yko7PKHZNXotIFUBG7I9"; // Замени на нужный, если хочешь
-const MODEL_ID = "eleven_multilingual_v2"; //  модель
+const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Замени на нужный, если хочешь
+const MODEL_ID = "eleven_flash_v2_5"; //  модель
 
 const app = express();
 app.use(cors());
