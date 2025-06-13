@@ -31,7 +31,7 @@ app.post("/stream", async (req, res) => {
         model_id: MODEL_ID,
         voice_settings: {
           stability: 0.5,
-          similarity_boost: 0.1
+          similarity_boost: 0.5
         }
       })
     });
